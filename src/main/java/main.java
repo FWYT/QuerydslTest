@@ -341,14 +341,14 @@ public class main {
     static void queryGeneric(HashMap<String,String> filter, LinkedHashMap<String,Integer> sort, int limit, PGPoolingDataSource dataSource, Connection c)
     {
         System.out.println("Start generic query \n");
-        SQLTemplates templates = new PostgreSQLTemplates();
+        SQLTemplates templates = new PostgreSQLTemplates().builder().printSchema().build();
         Configuration config = new Configuration(templates);
         config.setUseLiterals(true);
 
         SQLQueryFactory qF = new SQLQueryFactory(config, dataSource);
 
         //path to the table
-        PathBuilder<Object> playPath = new PathBuilder<Object>(Object.class, "playground");
+        PathBuilder<Object> playPath = new PathBuilder<Object>(Object.class, "schema_playground.schemaplay");
 
         Iterator filterI = filter.entrySet().iterator();
         BooleanBuilder where = new BooleanBuilder();
@@ -401,7 +401,10 @@ public class main {
         //generate query string
         SQLBindings bindings = sql.getSQL();
 
-        System.out.println(bindings.getSQL()+"\n");
+        //get rid of double quotes due to schema
+        String noQuote = bindings.getSQL().replace("\"", "");
+
+        System.out.println(noQuote+"\n");
     }
 
     static void insertRandom(Connection c)
@@ -430,7 +433,7 @@ public class main {
                 String u = uuid.toString();
                 String com = UUID.randomUUID().toString();
                 int tf = rand.nextInt(2);
-                sql = "INSERT INTO playground (type,location,color,install_date, uuid, comment, trueFalse) VALUES ('" + type.get(n) + "','" + location.get(o) +
+                sql = "INSERT INTO schema_playground.schemaplay(type,location,color,install_date, uuid, comment, trueFalse) VALUES ('" + type.get(n) + "','" + location.get(o) +
                         "','" + color.get(m) + "','" + month + "-" + day + "-" + year + "','" + u + "','" + com + "','" +
                         b.get(tf) + "');";
                 stmt.executeUpdate(sql);
@@ -524,6 +527,7 @@ public class main {
             Class.forName("org.postgresql.Driver");
             //c = DriverManager.getConnection("jdbc:postgresql://localhost:5432/frances", "frances", "frances");
             c = dataSource.getConnection();
+
             System.out.println("Opened Database Successfully!\n");
 
             //generate number to sql type map and column to number map
@@ -554,6 +558,7 @@ public class main {
 
             //query(dataSource, c);
             queryGeneric(filters, sorts, 10, dataSource, c);
+            //insertRandom(c);
 
 
             c.close();
