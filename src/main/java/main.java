@@ -46,6 +46,7 @@ public class main {
         StringPath text = Expressions.stringPath(playPath, "comment");
         DateTimePath<Timestamp> timePath = Expressions.dateTimePath(Timestamp.class, playPath, "time_stamp");
         BooleanPath tfPath = Expressions.booleanPath(playPath, "trueFalse");
+        NumberPath<Double> dotsPath = Expressions.numberPath(Double.class, playPath, "dots");
 
 
 
@@ -66,7 +67,7 @@ public class main {
         sorts.put("color", "desc");
         sorts.put("date", "asc");
 
-        SQLQuery b = qF.select(all).from(playPath).where(tfPath.eq(true)).limit(10);
+        SQLQuery b = qF.select(all).from(playPath).where(dotsPath.eq(3.5)).limit(10);
         //b.orderBy(locationPath.asc());
         //b.orderBy(colorPath.asc());
 
@@ -99,6 +100,10 @@ public class main {
             case 12: //varchar
                 StringPath sp = Expressions.stringPath(playPath, key);
                 where.and(sp.eq(value));
+                return where;
+            case 8: //double
+                NumberPath<Double> fp = Expressions.numberPath(Double.class, playPath, key);
+                where.and(fp.eq(Double.parseDouble(value)));
                 return where;
             case 4: //integer
                 NumberPath<Integer> np = Expressions.numberPath(Integer.class, playPath, key);
@@ -149,6 +154,17 @@ public class main {
                     sql.orderBy(sp.desc());
                 }
                 return sql;
+            case 8: //double
+                NumberPath<Double> fp = Expressions.numberPath(Double.class, playPath, key);
+                if (value == 1)
+                {
+                    sql.orderBy(fp.asc());
+                }
+                else
+                {
+                    sql.orderBy(fp.desc());
+                }
+                return sql;
             case 4: //integer
                 NumberPath<Integer> np = Expressions.numberPath(Integer.class, playPath, key);
                 if (value == 1)
@@ -185,6 +201,7 @@ public class main {
                 }
                 return sql;
             case 16: //boolean
+            case -7: //boolean BIT
                 BooleanPath tfPath = Expressions.booleanPath(playPath, key);
                 if (value == 1)
                 {
@@ -216,7 +233,7 @@ public class main {
         return colTypes.get(col) != null;
     }
 
-    static void queryGeneric(HashMap<String,String> filter, HashMap<String,Integer> sort, int limit, PGPoolingDataSource dataSource, Connection c)
+    static void queryGeneric(HashMap<String,String> filter, LinkedHashMap<String,Integer> sort, int limit, PGPoolingDataSource dataSource, Connection c)
     {
         System.out.println("Start generic query \n");
         SQLTemplates templates = new PostgreSQLTemplates();
@@ -231,11 +248,10 @@ public class main {
         Iterator filterI = filter.entrySet().iterator();
         BooleanBuilder where = new BooleanBuilder();
 
-        while (filterI.hasNext())
+        for (Map.Entry<String, String> entry : filter.entrySet())
         {
-            Map.Entry entry = (Map.Entry)filterI.next();
-            String key = (String)entry.getKey(); //column name
-            String value = (String)entry.getValue(); //what it should be equal to
+            String key = entry.getKey(); //column name
+            String value = entry.getValue(); //what it should be equal to
 
             //check that column is valid
             if (!validColumn(key))
@@ -252,28 +268,20 @@ public class main {
 
         SQLQuery sql = qF.select(all).from(playPath).where(where).limit(limit);
 
-        Iterator sortI = sort.entrySet().iterator();
-
-        while (sortI.hasNext())
+        for (Map.Entry<String, Integer> entry : sort.entrySet())
         {
-            Map.Entry entry = (Map.Entry)sortI.next();
-            String key = (String)entry.getKey(); //column name
-            Integer value = (Integer)entry.getValue(); //1 = asc, -1 = desc
+            String key = entry.getKey(); //column name
+            Integer value = entry.getValue(); //1 = asc, -1 = desc
 
             if (!validColumn(key))
             {
                 System.out.println("Invalid column name. Check case sensitivity and spelling.");
                 System.exit(1);
             }
-            if (value != -1 || value != 1)
+            if (value != -1 && value != 1)
             {
+                System.out.println(key + " " + value);
                 System.out.println("Invalid input value for sort. -1 = descending, 1 = ascending.");
-                System.exit(1);
-            }
-
-            if (!validColumn(key))
-            {
-                System.out.println("Invalid column name. Check case sensitivity and spelling");
                 System.exit(1);
             }
 
@@ -392,6 +400,7 @@ public class main {
     {
         System.out.println("Hello World\n");
 
+        //Set up datasource for connection and queryFactory
         PGPoolingDataSource dataSource = new PGPoolingDataSource();
         dataSource.setDataSourceName("Playground Data Source");
         dataSource.setServerName("localhost");
@@ -407,24 +416,29 @@ public class main {
             c = dataSource.getConnection();
             System.out.println("Opened Database Successfully!\n");
 
+            //generate number to sql type map and column to number map
+            //don't need number to sql map for actual usability
             generateMaps(c);
 
             HashMap<String,String> filters = new HashMap<String,String>();
-            filters.put("type", "swing");
+            //filters.put("type", "swing");
             filters.put("location", "east");
             //filters.put("color", "yellow");
             //filters.put("install_date", "2016-08-09");
             //filters.put("time_stamp","2016-06-07 16:47:58.642+00");
             //filters.put("uuid","bd3a1773-e047-4394-a4b8-c984f0232410");
-            filters.put("truefalse", "f");
+            //filters.put("truefalse", "f");
+            filters.put("dots", "3.5");
+            filters.put("lines", "4");
 
             //System.out.println(colTypes.get("trueFalse"));
 
-            HashMap<String, Integer> sorts = new HashMap<String, Integer>();
+            LinkedHashMap<String, Integer> sorts = new LinkedHashMap<String, Integer>();
             sorts.put("type", 1);
-            sorts.put("location", -1);
+            //sorts.put("location", -1);
             //sorts.put("color", -1);
             //sorts.put("date", 1);
+            sorts.put("dots", 1);
 
 
             //query(dataSource, c);
