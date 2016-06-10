@@ -290,7 +290,7 @@ public class main {
                 //mm/dd/yyyy, first number always becomes month
                 if (!value.matches("^"+mm+c+dd+c+yyyy+"$") && !value.matches("^"+yyyy+c+mm+c+dd+"$"))
                 {
-                    System.out.println("Not valid date. Make sure numbers are within appropriate bounds. Valid format: mm/dd/yyyy or mm-dd-yyyy.");
+                    System.out.println("Not valid date. Make sure numbers are within appropriate bounds. Valid format: mm/dd/yyyy or mm-dd-yyyy or yyyy-mm-dd or yyyy/mm/dd.");
                     return false;
                 }
                 System.out.println("valid");
