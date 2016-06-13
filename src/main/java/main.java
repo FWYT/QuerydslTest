@@ -137,31 +137,30 @@ public class main {
     static BooleanBuilder returnFilterBooleanBuilder(BooleanBuilder where, String key, int tp, String value, String cmp, PathBuilder playPath)
     {
         Operator op = getOp(cmp);
-        Predicate p;
+        Predicate p = null;
         switch (tp)
         {
             case 12: //varchar
                 StringPath sp = Expressions.stringPath(playPath, key);
                 p = Expressions.predicate(op, sp, Expressions.constant(value));
-                return where.and(p);
+                break;
             case 8: //double
                 NumberPath<Double> fp = Expressions.numberPath(Double.class, playPath, key);
                 p = Expressions.predicate(op, fp, Expressions.constant(value));
-                return where.and(p);
+                break;
             case 4: //integer
                 NumberPath<Integer> np = Expressions.numberPath(Integer.class, playPath, key);
                 p = Expressions.predicate(op, np, Expressions.constant(value));
-                return where.and(p);
+                break;
             case 2013: //Time with timezone
             case 2014: //timestamp with time zone
             case 93: //timestamp
                 DateTimePath<Timestamp> dtp = Expressions.dateTimePath(Timestamp.class, playPath, key);
                 p = Expressions.predicate(op, dtp, Expressions.constant(value));
-                return where.and(p);
+                break;
             case 91: //date
                 DatePath<LocalDate> dp = Expressions.datePath(LocalDate.class, playPath, key);
                 p = Expressions.predicate(op, dp, Expressions.constant(value));
-                return where.and(p);
             case 16: //boolean
             case -7: //boolean BIT
                 BooleanPath tfPath = Expressions.booleanPath(playPath, key);
@@ -173,13 +172,18 @@ public class main {
                 {
                     p = Expressions.predicate(op, tfPath, Expressions.constant(false));
                 }
-                return where.and(p);
+                break;
             case 1111: //other, aka UUID
                 StringPath otp = Expressions.stringPath(playPath, key);
                 p = Expressions.predicate(op, otp, Expressions.constant(value));
-                return where.and(p);
+                break;
         }
-        return null;
+        if (p == null)
+        {
+            System.out.println("Data type doesn't exist");
+            System.exit(1);
+        }
+        return where.and(p);
     }
 
     static SQLQuery returnSortBooleanBuilder(SQLQuery sql, String key, int value, PathBuilder playPath, HashMap<String,Integer> colTypes)
@@ -196,7 +200,7 @@ public class main {
                 {
                     sql.orderBy(sp.desc());
                 }
-                return sql;
+                break;
             case 8: //double
                 NumberPath<Double> fp = Expressions.numberPath(Double.class, playPath, key);
                 if (value == 1)
@@ -207,7 +211,7 @@ public class main {
                 {
                     sql.orderBy(fp.desc());
                 }
-                return sql;
+                break;
             case 4: //integer
                 NumberPath<Integer> np = Expressions.numberPath(Integer.class, playPath, key);
                 if (value == 1)
@@ -218,7 +222,7 @@ public class main {
                 {
                     sql.orderBy(np.desc());
                 }
-                return sql;
+                break;
             case 2013: //Time with timezone
             case 2014: //timestamp with time zone
             case 93: //timestamp
@@ -231,7 +235,7 @@ public class main {
                 {
                     sql.orderBy(dtp.desc());
                 }
-                return sql;
+                break;
             case 91: //date
                 DatePath<LocalDate> dp = Expressions.datePath(LocalDate.class, playPath, key);
                 if (value == 1)
@@ -242,7 +246,7 @@ public class main {
                 {
                     sql.orderBy(dp.desc());
                 }
-                return sql;
+                break;
             case 16: //boolean
             case -7: //boolean BIT
                 BooleanPath tfPath = Expressions.booleanPath(playPath, key);
@@ -254,7 +258,7 @@ public class main {
                 {
                     sql.orderBy(tfPath.desc());
                 }
-                return sql;
+                break;
             case 1111: //other, aka UUID
                 StringPath op = Expressions.stringPath(playPath, key);
                 if (value == 1)
@@ -265,10 +269,10 @@ public class main {
                 {
                     sql.orderBy(op.desc());
                 }
-                return sql;
+                break;
         }
 
-        return null;
+        return sql;
     }
 
     static boolean validColumn(String col, HashMap<String,Integer> colTypes)
@@ -374,26 +378,28 @@ public class main {
 
     static String getQuery(HashMap<String,Pair<String, String>> filter, LinkedHashMap<String,Integer> sort, int limit, PGPoolingDataSource dataSource, Connection c)
     {
-        System.out.println("Start generic query \n");
+        System.out.println("Start query \n");
+
         SQLTemplates templates = new PostgreSQLTemplates().builder().printSchema().build();
         Configuration config = new Configuration(templates);
-        config.setUseLiterals(true);
+        config.setUseLiterals(true); //shows schema in sql query
 
         SQLQueryFactory qF = new SQLQueryFactory(config, dataSource);
 
+        //create map between table columns and data type
         HashMap<String,Integer> colTypes = generateMaps(c);
 
         //path to the table
-        PathBuilder<Object> playPath = new PathBuilder<Object>(Object.class, "playground");
+        PathBuilder<Object> playPath = new PathBuilder<Object>(Object.class, "schema_playground.schemaplay");
 
-        Iterator filterI = filter.entrySet().iterator();
+        //create filter predicate
         BooleanBuilder where = new BooleanBuilder();
 
         for (Map.Entry<String, Pair<String, String>> entry : filter.entrySet())
         {
             String key = entry.getKey(); //column name
             String value = entry.getValue().getFirst(); //what it should be equal to
-            String cmp = entry.getValue().getSecond(); //the comparison operator:
+            String cmp = entry.getValue().getSecond(); //the comparison operator
 
             //check that column is valid
             if (!validColumn(key, colTypes))
@@ -402,9 +408,9 @@ public class main {
                 System.exit(1);
             }
 
-            System.out.println(key + " " + value + " " + cmp + "\n");
             int tp = colTypes.get(key);
 
+            //check value against data type
             if (!validValue(value, tp))
             {
                 System.out.println("Invalid value. Make sure filter values are of correct syntax.");
@@ -415,6 +421,7 @@ public class main {
 
         SQLQuery sql = qF.select(all).from(playPath).where(where).limit(limit);
 
+        //create sort predicate
         for (Map.Entry<String, Integer> entry : sort.entrySet())
         {
             String key = entry.getKey(); //column name
@@ -436,13 +443,13 @@ public class main {
         }
 
         //generate query string
-        SQLBindings bindings = sql.getSQL();
+        String query = sql.getSQL().getSQL();
 
         //get rid of double quotes due to schema
-        String noQuote = bindings.getSQL().replace("\"", "");
+        query = query.replace("\"", "");
 
-        System.out.println(noQuote+"\n");
-        return noQuote;
+        System.out.println("\n" + query +"\n");
+        return query;
     }
 
     static void insertRandom(Connection c)
@@ -581,12 +588,12 @@ public class main {
             HashMap<String,Pair<String,String>> filters = new HashMap<String,Pair<String,String>>();
             //filters.put("type", "swing");
             //filters.put("location", "east");
-            //filters.put("color", "yellow");
-            //filters.put("install_date", new Pair("2015-5-2",">"));
-            filters.put("time_stamp", new Pair("2016-06-07 16:47:58.642+00", ">="));
+            filters.put("color", new Pair("red","="));
+            filters.put("install_date", new Pair("2015-5-2",">"));
+            //filters.put("time_stamp", new Pair("2016-06-07 16:47:58.642+00", ">="));
             //filters.put("uuid","bd3a1773-e047-4394-a4b8-c984f0232410");
             //filters.put("truefalse", new Pair("false", "="));
-            filters.put("dots", new Pair("3.5", "="));
+            //filters.put("dots", new Pair("3.5", "="));
             //filters.put("lines", "4");
 
             //System.out.println(colTypes.get("trueFalse"));
@@ -595,8 +602,8 @@ public class main {
             //sorts.put("type", 1);
             //sorts.put("location", -1);
             sorts.put("color", -1);
-            //sorts.put("date", 1);
-            sorts.put("dots", 1);
+            sorts.put("install_date", 1);
+            //sorts.put("dots", 1);
 
             //validValue("00:00:00+00", 2013);
 
