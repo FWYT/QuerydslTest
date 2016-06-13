@@ -27,7 +27,7 @@ import static com.querydsl.sql.SQLExpressions.all;
 public class main {
 
     static HashMap<Integer, String> types = new HashMap<Integer, String>();
-    static HashMap<String, Integer> colTypes = new HashMap<String, Integer>();
+    //static HashMap<String, Integer> colTypes = new HashMap<String, Integer>();
 
     static String query(PGPoolingDataSource dataSource, Connection c)
     {
@@ -182,7 +182,7 @@ public class main {
         return null;
     }
 
-    static SQLQuery returnSortBooleanBuilder(SQLQuery sql, String key, int value, PathBuilder playPath)
+    static SQLQuery returnSortBooleanBuilder(SQLQuery sql, String key, int value, PathBuilder playPath, HashMap<String,Integer> colTypes)
     {
         switch (colTypes.get(key))
         {
@@ -271,7 +271,7 @@ public class main {
         return null;
     }
 
-    static boolean validColumn(String col)
+    static boolean validColumn(String col, HashMap<String,Integer> colTypes)
     {
         return colTypes.get(col) != null;
     }
@@ -372,7 +372,7 @@ public class main {
         return true;
     }
 
-    static void queryGeneric(HashMap<String,Pair<String, String>> filter, LinkedHashMap<String,Integer> sort, int limit, PGPoolingDataSource dataSource, Connection c)
+    static String getQuery(HashMap<String,Pair<String, String>> filter, LinkedHashMap<String,Integer> sort, int limit, PGPoolingDataSource dataSource, Connection c)
     {
         System.out.println("Start generic query \n");
         SQLTemplates templates = new PostgreSQLTemplates().builder().printSchema().build();
@@ -380,6 +380,8 @@ public class main {
         config.setUseLiterals(true);
 
         SQLQueryFactory qF = new SQLQueryFactory(config, dataSource);
+
+        HashMap<String,Integer> colTypes = generateMaps(c);
 
         //path to the table
         PathBuilder<Object> playPath = new PathBuilder<Object>(Object.class, "playground");
@@ -394,7 +396,7 @@ public class main {
             String cmp = entry.getValue().getSecond(); //the comparison operator:
 
             //check that column is valid
-            if (!validColumn(key))
+            if (!validColumn(key, colTypes))
             {
                 System.out.println("Invalid column name. Check case sensitivity and spelling.");
                 System.exit(1);
@@ -418,7 +420,7 @@ public class main {
             String key = entry.getKey(); //column name
             Integer value = entry.getValue(); //1 = asc, -1 = desc
 
-            if (!validColumn(key))
+            if (!validColumn(key, colTypes))
             {
                 System.out.println("Invalid column name. Check case sensitivity and spelling.");
                 System.exit(1);
@@ -430,7 +432,7 @@ public class main {
                 System.exit(1);
             }
 
-            sql = returnSortBooleanBuilder(sql, key, value, playPath);
+            sql = returnSortBooleanBuilder(sql, key, value, playPath, colTypes);
         }
 
         //generate query string
@@ -440,6 +442,7 @@ public class main {
         String noQuote = bindings.getSQL().replace("\"", "");
 
         System.out.println(noQuote+"\n");
+        return noQuote;
     }
 
     static void insertRandom(Connection c)
@@ -513,8 +516,9 @@ public class main {
         }
     }
 
-    static void generateMaps(Connection c)
+    static HashMap<String,Integer> generateMaps(Connection c)
     {
+        HashMap<String, Integer> colTypes = new HashMap<String, Integer>();
         try {
             DatabaseMetaData dbmd = c.getMetaData();
             ResultSet cols = dbmd.getColumns(null, null, "playground", "%");
@@ -534,8 +538,10 @@ public class main {
                 int dataType = cols.getShort("DATA_TYPE");
                 colTypes.put(name, dataType);
             }
-            System.out.println(colTypes);
+           // System.out.println(colTypes);
             System.out.println(types+"\n");
+
+
         }
         catch (Exception e)
         {
@@ -543,6 +549,8 @@ public class main {
             System.err.println(e.getClass().getName()+": "+e.getMessage());
             System.exit(0);
         }
+        System.out.println(types+"\n");
+        return colTypes;
     }
 
     public static void main(String[] args)
@@ -593,7 +601,7 @@ public class main {
             //validValue("00:00:00+00", 2013);
 
             //query(dataSource, c);
-            queryGeneric(filters, sorts, 10, dataSource, c);
+            getQuery(filters, sorts, 10, dataSource, c);
             //insertRandom(c);
             //printAll(c);
 
