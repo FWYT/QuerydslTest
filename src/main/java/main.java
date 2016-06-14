@@ -19,6 +19,8 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.*;
 
+import javax.inject.Provider;
+
 import static com.querydsl.sql.SQLExpressions.all;
 
 /**
@@ -37,6 +39,7 @@ public class main {
         config.setUseLiterals(true);
 
         SQLQueryFactory qF = new SQLQueryFactory(config, dataSource);
+        SQLQuery sq = new SQLQuery(c, config);
 
         PathBuilder<Object> playPath = new PathBuilder<Object>(Object.class, "playground");
         Path<String> typePath = Expressions.path(String.class, playPath, "type");
@@ -52,6 +55,7 @@ public class main {
 
 
 
+
         BooleanBuilder where = new BooleanBuilder();
         HashMap<String,Pair<String,String>> filters = new HashMap<String,Pair<String,String>>();
         filters.put("type", new Pair("slide", "="));
@@ -62,6 +66,9 @@ public class main {
         Operator op = Ops.LOE;
         Predicate p = Expressions.predicate(op, timePath, Expressions.constant(filters.get("install_date").getFirst()));
 
+        sq.select(all).from(playPath).where(p).orderBy(colorPath.asc()).limit(10);
+        String q = sq.getSQL().getSQL();
+        System.out.println(q);
         //where.and(typePath.);
         //where.and(colorPath.eq(filters.get("color")));
         //where.and(locationPath.eq(filters.get("location")));
@@ -78,7 +85,7 @@ public class main {
         //b.orderBy(locationPath.asc());
         //b.orderBy(colorPath.asc());
 
-        System.out.println(b.getSQL().getSQL());
+        //System.out.println(b.getSQL().getSQL());
 
 
 
@@ -312,14 +319,14 @@ public class main {
                 return true;
 
             case 93: //timestamp
-                if (!value.matches("^"+mm+c+dd+c+yyyy + "((\\s)" + time +")?(.*)") && !value.matches("^"+yyyy+c+mm+c+dd + "((\\s)" + time +")?(.*)"))
+                if (!value.matches("^"+mm+c+dd+c+yyyy + "((\\s)" + time +"(.*))?") && !value.matches("^"+yyyy+c+mm+c+dd + "((\\s)" + time +"(.*))?"))
                 {
                     System.out.println("Not valid timestamp.");
                     return false;
                 }
                 return true;
             case 2014: //timestamp with time zone //must have date
-                if (!value.matches("^"+mm+c+dd+c+yyyy + "((\\s)" + time +")?(.*)") && !value.matches("^"+yyyy+c+mm+c+dd + "((\\s)" + time +")?(.*)"))
+                if (!value.matches("^"+mm+c+dd+c+yyyy + "((\\s)" + time +"(.*))?") && !value.matches("^"+yyyy+c+mm+c+dd + "((\\s)" + time +"(.*))?"))
                 {
                     System.out.println("Not valid timestamp.");
                     return false;
@@ -376,21 +383,28 @@ public class main {
         return true;
     }
 
-    static String getQuery(HashMap<String,Pair<String, String>> filter, LinkedHashMap<String,Integer> sort, int limit, PGPoolingDataSource dataSource, Connection c)
+    public String getQuery(HashMap<String,Pair<String, String>> filter, LinkedHashMap<String,Integer> sort, int limit, Connection c)
     {
         System.out.println("Start query \n");
+
+        if (limit<=0)
+        {
+            System.out.println("Limit must be greater than 0.");
+            return "";
+        }
 
         SQLTemplates templates = new PostgreSQLTemplates().builder().printSchema().build();
         Configuration config = new Configuration(templates);
         config.setUseLiterals(true); //shows schema in sql query
 
-        SQLQueryFactory qF = new SQLQueryFactory(config, dataSource);
+        //SQLQueryFactory qF = new SQLQueryFactory(config, dataSource);
+        SQLQuery qF = new SQLQuery(c,config);
 
         //create map between table columns and data type
         HashMap<String,Integer> colTypes = generateMaps(c);
 
         //path to the table
-        PathBuilder<Object> playPath = new PathBuilder<Object>(Object.class, "schema_playground.schemaplay");
+        PathBuilder<Object> tablePath = new PathBuilder<Object>(Object.class, "bnr.bnr_out_current");
 
         //create filter predicate
         BooleanBuilder where = new BooleanBuilder();
@@ -405,7 +419,7 @@ public class main {
             if (!validColumn(key, colTypes))
             {
                 System.out.println("Invalid column name. Check case sensitivity and spelling.");
-                System.exit(1);
+                return "";
             }
 
             int tp = colTypes.get(key);
@@ -414,12 +428,12 @@ public class main {
             if (!validValue(value, tp))
             {
                 System.out.println("Invalid value. Make sure filter values are of correct syntax.");
-                System.exit(1);
+                return "";
             }
-            where = returnFilterBooleanBuilder(where, key, tp, value, cmp,playPath);
+            where = returnFilterBooleanBuilder(where, key, tp, value, cmp, tablePath);
         }
 
-        SQLQuery sql = qF.select(all).from(playPath).where(where).limit(limit);
+        qF.select(all).from(tablePath).where(where).limit(limit);
 
         //create sort predicate
         for (Map.Entry<String, Integer> entry : sort.entrySet())
@@ -430,20 +444,19 @@ public class main {
             if (!validColumn(key, colTypes))
             {
                 System.out.println("Invalid column name. Check case sensitivity and spelling.");
-                System.exit(1);
+                return "";
             }
             if (value != -1 && value != 1)
             {
-                System.out.println(key + " " + value);
                 System.out.println("Invalid input value for sort. -1 = descending, 1 = ascending.");
-                System.exit(1);
+                return "";
             }
 
-            sql = returnSortBooleanBuilder(sql, key, value, playPath, colTypes);
+            qF = returnSortBooleanBuilder(qF, key, value, tablePath, colTypes);
         }
 
         //generate query string
-        String query = sql.getSQL().getSQL();
+        String query = qF.getSQL().getSQL();
 
         //get rid of double quotes due to schema
         query = query.replace("\"", "");
@@ -605,10 +618,10 @@ public class main {
             sorts.put("install_date", 1);
             //sorts.put("dots", 1);
 
-            //validValue("00:00:00+00", 2013);
+            //validValue("2016-06-09 13:12:51+00",2014);
 
-            //query(dataSource, c);
-            getQuery(filters, sorts, 10, dataSource, c);
+            query(dataSource, c);
+            //getQuery(filters, sorts, 10, c);
             //insertRandom(c);
             //printAll(c);
 
